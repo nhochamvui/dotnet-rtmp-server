@@ -58,11 +58,19 @@ namespace net_rtmp_server
                             Console.WriteLine("Received c2 and sent s2");
                             Console.WriteLine("----------------------------------------");
                         }
+                        else if (time == 2)
+                        {
+                            Console.WriteLine("----------------------------------------");
+                            var connectCommand = bytes[..3000];
+                            var windowAckSize = BitConverter.GetBytes(4);
+                            stream.Write(windowAckSize, 0, windowAckSize.Length);
+                            Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(connectCommand)}");
+                            Console.WriteLine("----------------------------------------");
+                        }
                         else
                         {
                             Console.WriteLine("----------------------------------------");
-                            var c3 = bytes[..3000];
-                            Console.WriteLine($"Received c3: {Encoding.ASCII.GetString(c3)}");
+                            Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(bytes[..3000])}");
                             Console.WriteLine("----------------------------------------");
                         }
 
