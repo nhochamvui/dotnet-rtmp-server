@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "net-rtmp-server": {
+      "commandName": "Project"
+    },
+    "Container (Dockerfile)": {
+      "commandName": "Docker"
+    }
+  }
+}
