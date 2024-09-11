@@ -1,7 +1,6 @@
 ﻿using System.Net.Sockets;
 using System.Net;
 using System.Text;
-using System.Runtime.Intrinsics.Arm;
 
 namespace net_rtmp_server
 {
@@ -16,33 +15,32 @@ namespace net_rtmp_server
             {
                 listener.Start();
                 Console.WriteLine($"Listening on {ipEndPoint.Address}:{ipEndPoint.Port}...");
-                byte[] bytes = new byte[1550];
-                String data;
+                byte[] bytes = new byte[3000];
                 while (true)
                 {
                     using TcpClient client = listener.AcceptTcpClient();
                     Console.WriteLine("Connected!");
-                    data = null;
 
                     // Get a stream object for reading and writing
                     NetworkStream stream = client.GetStream();
 
                     int i;
+                    int packetSize = 1536;
                     int time = 0;
                     int c0Index = 0;
                     int c1Index = 1;
                     byte s0 = 0;
-                    byte[] c1 = new byte[1536];
+                    byte[] c1 = new byte[packetSize];
                     byte[] s1 = GetS1Packet();
-                    byte[] s2 = new byte[1536];
-                    byte[] c2 = new byte[1536];
+                    byte[] s2 = new byte[packetSize];
+                    byte[] c2 = new byte[packetSize];
                     // Loop to receive all the data sent by the client.
                     while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
                     {
                         if (time == 0)
                         {
                             s0 = bytes[c0Index];
-                            c1 = bytes[c1Index..1537];
+                            c1 = bytes[c1Index..(packetSize + 1)];
                             s2 = GetS2Packet(c1, s1);
 
                             Console.WriteLine("----------------------------------------");
@@ -55,16 +53,17 @@ namespace net_rtmp_server
                         else if (time == 1)
                         {
                             Console.WriteLine("----------------------------------------");
-                            c2 = bytes[0..1536];
-                            stream.Write(s2, 0, s1.Length);
-                            Console.WriteLine("Recieved c2 and sent s2");
+                            c2 = bytes[..packetSize];
+                            stream.Write(s2, 0, s2.Length);
+                            Console.WriteLine("Received c2 and sent s2");
                             Console.WriteLine("----------------------------------------");
                         }
                         else
                         {
-                            var c3 = bytes[0..1536];
-                            var s3 = GetS3Packet(c3, s2);
-                            stream.Write(s3, 0, s3.Length);
+                            Console.WriteLine("----------------------------------------");
+                            var c3 = bytes[..3000];
+                            Console.WriteLine($"Received c3: {Encoding.ASCII.GetString(c3)}");
+                            Console.WriteLine("----------------------------------------");
                         }
 
                         time++;
