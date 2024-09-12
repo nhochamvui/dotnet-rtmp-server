@@ -1,4 +1,5 @@
-﻿using System.Net.Sockets;
+﻿using System.Collections;
+using System.Net.Sockets;
 using System.Net;
 using System.Text;
 
@@ -56,6 +57,7 @@ namespace net_rtmp_server
                             {
                                 Console.WriteLine("----------------------------------------");
                                 var connectCommand = bytes;
+                                HandleChunkStreamPacket(bytes);
                                 Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(connectCommand)}");
                                 break;
                             }
@@ -124,12 +126,59 @@ namespace net_rtmp_server
             return s2;
         }
 
-        static Byte[] ReadChunkStream()
+        private const String chunksHaveNoHeader = """
+                                                  chunks have no message header. 
+                                                  The stream ID, message length and timestamp delta fields are not present;
+                                                  chunks of this type take values from the preceding chunk for the same Chunk Stream ID
+                                                  """;
+
+        static void HandleChunkStreamPacket(byte[] chunkStreamPacket)
         {
-            int length = 1536;
-            byte[] packet = new byte[length];
-            
-            return packet;
+            int chunkType = GetChunkType(chunkStreamPacket);
+            int formHeaderByteType = ByteFormHeader(chunkStreamPacket); 
+            int chunkStreamId = formHeaderByteType switch
+            {
+                1 => chunkStreamPacket[0] >> 2,
+                _ => throw new NotImplementedException()
+            };
+            int chunkMessageHeaderSize = chunkType switch
+            {
+                0 => 11,
+                1 => 7,
+                2 => 3,
+                _ => throw new NotImplementedException(chunksHaveNoHeader)
+            };
+            var chunkMessageHeader = chunkStreamPacket[formHeaderByteType..(chunkMessageHeaderSize + 1)];
+            int timestampDeltaSize = 3;
+            var timestampDelta = BitConverter.ToInt32([
+                0x00, chunkMessageHeader[0], chunkMessageHeader[1], chunkMessageHeader[2]
+            ], 0);
+            if (timestampDelta > 0xFFFFFF)
+            {
+                timestampDeltaSize = 4;
+                // timestampDelta = BitConverter.ToInt32(chunkMessageHeader.AsSpan()[..4]);
+            }
+
+            var messageLength = BitConverter.ToInt32([
+                0x00,
+                chunkMessageHeader[timestampDeltaSize],
+                chunkMessageHeader[timestampDeltaSize+1],
+                chunkMessageHeader[timestampDeltaSize+2],
+            ]);
+            int messageTypeId = chunkMessageHeader[timestampDeltaSize + 3];
+            int messageStreamId = BitConverter.ToInt32(chunkMessageHeader[(timestampDeltaSize + 4)..], 0);
+        }
+
+        static int GetChunkType(byte[] bytes) => bytes[0] >> 6;
+
+        static int ByteFormHeader(byte[] chunkStreamPacket)
+        {
+            return chunkStreamPacket.First() switch
+            {
+                0 => 2,
+                1 => 3,
+                _ => 1
+            };
         }
     }
 }
