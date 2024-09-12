@@ -15,7 +15,8 @@ namespace net_rtmp_server
             {
                 listener.Start();
                 Console.WriteLine($"Listening on {ipEndPoint.Address}:{ipEndPoint.Port}...");
-                byte[] bytes = new byte[3000];
+                int packetSize = 1536;
+                byte[] bytes = new byte[packetSize+5];
                 while (true)
                 {
                     using TcpClient client = listener.AcceptTcpClient();
@@ -24,56 +25,43 @@ namespace net_rtmp_server
                     // Get a stream object for reading and writing
                     NetworkStream stream = client.GetStream();
 
-                    int i;
-                    int packetSize = 1536;
                     int time = 0;
                     int c0Index = 0;
                     int c1Index = 1;
-                    byte s0 = 0;
-                    byte[] c1 = new byte[packetSize];
+                    byte[] c1;
                     byte[] s1 = GetS1Packet();
                     byte[] s2 = new byte[packetSize];
-                    byte[] c2 = new byte[packetSize];
                     // Loop to receive all the data sent by the client.
-                    while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
+                    while (stream.Read(bytes, 0, bytes.Length) != 0)
                     {
-                        if (time == 0)
+                        switch (time)
                         {
-                            s0 = bytes[c0Index];
-                            c1 = bytes[c1Index..(packetSize + 1)];
-                            s2 = GetS2Packet(c1, s1);
+                            case 0:
+                                var s0 = bytes[c0Index];
+                                c1 = bytes[c1Index..(packetSize + 1)];
+                                s2 = GetS2Packet(c1, s1);
 
-                            Console.WriteLine("----------------------------------------");
-                            Console.WriteLine("Handshake...");
-                            stream.Write([s0], 0, 1);
-                            stream.Write(s1, 0, s1.Length);
-                            Console.WriteLine($"Sent s0: {s0}, s1: {Encoding.ASCII.GetString(s1)}");
-                            Console.WriteLine("----------------------------------------");
-                        }
-                        else if (time == 1)
-                        {
-                            Console.WriteLine("----------------------------------------");
-                            c2 = bytes[..packetSize];
-                            stream.Write(s2, 0, s2.Length);
-                            Console.WriteLine("Received c2 and sent s2");
-                            Console.WriteLine("----------------------------------------");
-                        }
-                        else if (time == 2)
-                        {
-                            Console.WriteLine("----------------------------------------");
-                            var connectCommand = bytes[..3000];
-                            var windowAckSize = BitConverter.GetBytes(4);
-                            stream.Write(windowAckSize, 0, windowAckSize.Length);
-                            Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(connectCommand)}");
-                            Console.WriteLine("----------------------------------------");
-                        }
-                        else
-                        {
-                            Console.WriteLine("----------------------------------------");
-                            Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(bytes[..3000])}");
-                            Console.WriteLine("----------------------------------------");
+                                Console.WriteLine("----------------------------------------");
+                                Console.WriteLine("Handshake...");
+                                stream.Write([s0], 0, 1);
+                                stream.Write(s1, 0, s1.Length);
+                                Console.WriteLine($"Sent s0: {s0}, s1: {Encoding.ASCII.GetString(s1)}");
+                                break;
+                            case 1:
+                                Console.WriteLine("----------------------------------------");
+                                stream.Write(s2, 0, s2.Length);
+                                Console.WriteLine("Connected!");
+                                break;
+                            default:
+                            {
+                                Console.WriteLine("----------------------------------------");
+                                var connectCommand = bytes;
+                                Console.WriteLine($"Received connect command: {Encoding.ASCII.GetString(connectCommand)}");
+                                break;
+                            }
                         }
 
+                        Console.WriteLine("----------------------------------------");
                         time++;
                     }
                 }
@@ -136,27 +124,12 @@ namespace net_rtmp_server
             return s2;
         }
 
-        static Byte[] GetS3Packet(Byte[] c2, Byte[] s2)
+        static Byte[] ReadChunkStream()
         {
             int length = 1536;
-            byte[] s3 = new byte[length];
-            for (int index = 0; index < 4; index++)
-            {
-                s3[index] = c2[index];
-            }
-            var timestampChunk = s3.AsSpan(4, 4);
-            for (int i = 0; i < timestampChunk.Length; i++)
-            {
-                timestampChunk[i] = s2[i];
-            }
-            for (int index = 8; index < length; index++)
-            {
-                byte rndNumber = Convert.ToByte(new Random(DateTime.UtcNow.Millisecond).GetItems(
-                    [1, 2, 3, 4, 5, 12, 24, 35, 99, 64, 3, 7], 1
-                    )[0]);
-                s3[index] = rndNumber;
-            }
-            return s3;
+            byte[] packet = new byte[length];
+            
+            return packet;
         }
     }
 }
